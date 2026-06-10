@@ -18,8 +18,19 @@ getAbsoluteLocaleUrlList('');                                // ['https://exampl
 //                          inconsistent within a single call ─────────────────^
 ```
 
-The last call is the documented hreflang use case — it emits alternate URLs that
-the very same configuration 301-redirects.
+The last call returns one URL per locale — the shape an hreflang block needs —
+and is inconsistent within a single call: the default locale gets no slash,
+every other locale gets one.
+
+## Why it matters
+
+The affected URLs are the most-linked pages of a localized site — every language
+switcher and every hreflang block includes each locale’s home page. Each affected
+navigation costs an extra 301 round trip (an extra billed invocation on
+serverless/edge), and hreflang/canonical alternates built from
+`getAbsoluteLocaleUrlList()` point crawlers at redirecting URLs — contradicting
+what `@astrojs/sitemap`, which honors `trailingSlash: 'never'`, emits for the
+same pages.
 
 ## Steps to reproduce
 

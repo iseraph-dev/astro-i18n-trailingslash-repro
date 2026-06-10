@@ -8,7 +8,7 @@ astro:i18n URL helpers return trailing slashes that violate `trailingSlash: 'nev
 
 Before posting:
 1. Push this repro to a public GitHub repo (or import to StackBlitz)
-   and replace REPLACE_WITH_REPRO_URL below.
+   and replace https://github.com/iseraph-dev/astro-i18n-trailingslash-repro below.
 2. Optionally tick the Participation checkbox.
 
 Submit with:
@@ -189,7 +189,7 @@ getAbsoluteLocaleUrlList('');  // ['https://example.com', 'https://example.com/p
 
 ### Link to Minimal Reproducible Example
 
-REPLACE_WITH_REPRO_URL
+https://github.com/iseraph-dev/astro-i18n-trailingslash-repro
 
 `output: 'server'` with `@astrojs/node` (standalone), `trailingSlash: 'never'`, two locales; every URL exercised by the tests exists as a real page. `npm install && npm test` builds the site, starts the built server, and asserts over HTTP in two sections: **URL generation** (the seven calls above — five fail) and **server enforcement** (these pass: the slash-less URLs the helpers should return respond 200 — `/pl`, `/pl/docs/setup`, `/blog/pl/docs/setup` — while the URLs they actually return are 301-redirected — `/pl/`, `/blog/pl/docs/setup/`), demonstrating that Astro redirects away from the URLs its own helpers generate. `npm run dev` shows the same via the language-switcher link → 404 notice page.
 
