@@ -4,7 +4,7 @@ DRAFT — not posted. This HTML comment is invisible when rendered on
 GitHub, but you may delete it before submitting.
 
 Title:
-getRelativeLocaleUrl() / getAbsoluteLocaleUrl() return a trailing slash for an empty/root path, violating `trailingSlash: 'never'` (re-file of #14140)
+astro:i18n URL helpers return trailing slashes that violate `trailingSlash: 'never'` — Astro 301-redirects its own generated URLs (re-file of #14140)
 
 Before posting:
 1. Push this repro to a public GitHub repo (or import to StackBlitz)
@@ -13,7 +13,7 @@ Before posting:
 
 Submit with:
   gh issue create --repo withastro/astro \
-    --title "getRelativeLocaleUrl() / getAbsoluteLocaleUrl() return a trailing slash for an empty/root path, violating \`trailingSlash: 'never'\` (re-file of #14140)" \
+    --title "astro:i18n URL helpers return trailing slashes that violate \`trailingSlash: 'never'\` — Astro 301-redirects its own generated URLs (re-file of #14140)" \
     --body-file ISSUE_DRAFT.md
 or open the form prefilled in the browser by appending --web.
 ══════════════════════════════════════════════════════════════════════
@@ -27,8 +27,8 @@ Vite                     v7.3.5
 Node                     v24.16.0
 System                   Linux (x64)
 Package Manager          npm
-Output                   static
-Adapter                  none
+Output                   server
+Adapter                  @astrojs/node (v10.1.4)
 Integrations             none
 ```
 
@@ -38,35 +38,43 @@ No response
 
 ### Describe the Bug
 
-With `trailingSlash: 'never'`, `getRelativeLocaleUrl()` and `getAbsoluteLocaleUrl()` from `astro:i18n` return URLs **with** a trailing slash whenever the `path` argument is empty (`''`) or root (`'/'`) and the URL has a locale prefix:
+With `trailingSlash: 'never'`, the `astro:i18n` URL helpers return URLs **with** a trailing slash in three situations:
 
 ```js
 // astro.config.mjs: trailingSlash: 'never',
 // i18n: { defaultLocale: 'en', locales: ['en', 'pl'] }, site: 'https://example.com'
 
-getRelativeLocaleUrl('pl');          // '/pl'                      ✅
-getRelativeLocaleUrl('pl', '');      // '/pl/'                     ❌ expected '/pl'
-getRelativeLocaleUrl('pl', '/');     // '/pl/'                     ❌ expected '/pl'
-getRelativeLocaleUrl('pl', 'about'); // '/pl/about'                ✅
-getAbsoluteLocaleUrl('pl', '');      // 'https://example.com/pl/'  ❌ expected 'https://example.com/pl'
+getRelativeLocaleUrl('pl');                                  // '/pl'                  ✅
+getRelativeLocaleUrl('pl', '');                              // '/pl/'                 ❌ expected '/pl'
+getRelativeLocaleUrl('pl', '/');                             // '/pl/'                 ❌ expected '/pl'
+getRelativeLocaleUrl('pl', 'docs/setup');                    // '/pl/docs/setup'       ✅ (nested paths are fine)
+getRelativeLocaleUrl('pl', 'docs/setup/', { prependWith: 'blog' });
+                                                             // '/blog/pl/docs/setup/' ❌ expected '/blog/pl/docs/setup'
+getAbsoluteLocaleUrl('pl', '');                              // 'https://example.com/pl/' ❌
+getAbsoluteLocaleUrlList('');                                // ['https://example.com', 'https://example.com/pl/'] ❌
 ```
 
-Note the inconsistency in the first two lines: omitting `path` and passing `''` produce different URLs. No `trailingSlash` semantics can explain `undefined` ≠ `''`.
+Note two inconsistencies that no `trailingSlash` semantics can explain:
 
-This is a re-file of #14140 (same title, closed as stale on no activity), where @matthewp wrote:
+- omitting `path` vs passing `''` produce different URLs (`/pl` vs `/pl/`);
+- `getAbsoluteLocaleUrlList('')` — the documented hreflang use case — is inconsistent **within a single call**: the default locale gets no slash, every other locale gets one.
+
+This is a re-file of #14140 (same bug, closed as stale on no activity), where @matthewp wrote:
 
 > If you're still experiencing this in Astro 6, please open a new issue and we'll take a fresh look.
 
 It reproduces on Astro 6.4.5. Previously reported in #9919, #11630, #13032 and #14140; #13045 fixed only the case where the join collapses to `""` (default locale, no base), not the locale-prefixed one.
 
+Why projects end up here: with `'always'` or the default `'ignore'` + `build.format: 'directory'`, these helpers append a slash to *every* URL, so an on-demand-rendered site that wants slash-less URLs has exactly one option — `trailingSlash: 'never'` — and then hits this bug on its language switcher and hreflang alternates.
+
 #### Astro itself rejects the URLs it generates
 
-The same config that produces these links refuses to serve them — verified in this reproduction:
+The same config that produces these links refuses to serve them — both asserted live in the reproduction:
 
 - **dev**: `GET /pl/` → **404** with the notice *“Your site is configured with `trailingSlash` set to `never`. Do you want to go to `/pl` instead?”* (`GET /pl` → 200)
-- **on-demand rendering**: `GET /pl/` → **301** redirect to `/pl` (308 for non-GET) via `TrailingSlashHandler` (`packages/astro/src/core/routing/trailing-slash-handler.ts`)
+- **on-demand rendering** (`@astrojs/node`): `GET /pl/` → **301** redirect to `/pl` (308 for non-GET) via `TrailingSlashHandler` (`packages/astro/src/core/routing/trailing-slash-handler.ts`)
 
-So the canonical use case from the docs — a language switcher pointing at a locale’s home page — produces a link that 404s in dev and costs a redirect on every click in production.
+Practical impact: a language switcher pointing at a locale’s home page 404s in dev and costs a redirect on every click in production, and hreflang/canonical alternates built from `getAbsoluteLocaleUrlList()` send search engines to URLs that 301.
 
 #### Root cause
 
@@ -88,11 +96,17 @@ if (shouldAppendForwardSlash(trailingSlash, format)) {
 
 ```js
 function joinPaths(...paths) {
-  return paths.filter(isString).map(/* trim slashes */).join('/');
+  return paths.filter(isString).map((path, i) => {
+    if (i === 0) return removeTrailingForwardSlash(path);
+    else if (i === paths.length - 1) return removeLeadingForwardSlash(path);
+    else return trimSlashes(path);
+  }).join('/');
 }
 ```
 
-`getLocaleAbsoluteUrl` has the same append-only logic in its `else` branch.
+The `prependWith` case is a second mechanism in the same function: `i === paths.length - 1` compares the **filtered** index against the **unfiltered** rest-parameter length. When `prependWith` is `undefined` the last-element branch never fires and `trimSlashes` accidentally cleans trailing slashes from the input path; when `prependWith` is a string, the branch fires and a trailing slash in `path` survives into the output.
+
+`getLocaleAbsoluteUrl` and the `*List` variants delegate to the same logic, so they inherit all of the above.
 
 #### The documentation contradicts this behavior
 
@@ -119,7 +133,8 @@ In #13032 @ematipico suggested omitting the argument instead of passing `''`. Th
 
 - `'/'` is an unambiguously valid root path and is equally affected;
 - the official docs example itself passes `""`;
-- in real code `path` is computed, not literal — e.g. a language switcher deriving the equivalent page from `Astro.url.pathname` naturally yields `''` on the home page, so the API silently degrades on the single most-linked page of the site.
+- in real code `path` is computed, not literal — e.g. a language switcher or an hreflang loop deriving the equivalent page from `Astro.url.pathname` naturally yields `''` on the home page, so the API silently degrades on the single most-linked page of the site;
+- omitting the argument is not even possible for `getAbsoluteLocaleUrlList(path)`, whose whole purpose is mapping one path across all locales.
 
 #### Suggested fix
 
@@ -129,17 +144,19 @@ In the `else` branch of both `getLocaleRelativeUrl` and `getLocaleAbsoluteUrl`:
 relativePath = removeTrailingForwardSlash(joinPaths(...pathsToJoin));
 ```
 
-The existing `if (relativePath === "") return "/";` guard (from #13045) keeps the root case correct, and this also normalizes caller input like `'about/'`. A narrower alternative is dropping empty segments in `joinPaths` (`filter((p) => isString(p) && p !== '')`).
+The existing `if (relativePath === "") return "/";` guard (from #13045) keeps the root case correct. This one-liner fixes every case above, including the `prependWith` one and the `*List` variants (they delegate). A narrower alternative — dropping empty segments in `joinPaths` (`filter((p) => isString(p) && p !== '')`) — would fix only the empty/root-path class, not the `prependWith` trailing-slash class.
 
 ### What's the expected result?
 
 With `trailingSlash: 'never'`, no URL generated by `astro:i18n` ends with a trailing slash — the same invariant `TrailingSlashHandler` enforces for incoming requests:
 
 ```js
-getRelativeLocaleUrl('pl');          // '/pl'
-getRelativeLocaleUrl('pl', '');      // '/pl'
-getRelativeLocaleUrl('pl', '/');     // '/pl'
-getAbsoluteLocaleUrl('pl', '');      // 'https://example.com/pl'
+getRelativeLocaleUrl('pl');                                          // '/pl'
+getRelativeLocaleUrl('pl', '');                                      // '/pl'
+getRelativeLocaleUrl('pl', '/');                                     // '/pl'
+getRelativeLocaleUrl('pl', 'docs/setup/', { prependWith: 'blog' });  // '/blog/pl/docs/setup'
+getAbsoluteLocaleUrl('pl', '');                                      // 'https://example.com/pl'
+getAbsoluteLocaleUrlList('');  // ['https://example.com', 'https://example.com/pl']
 ```
 
 …and `getRelativeLocaleUrl(locale)` ≡ `getRelativeLocaleUrl(locale, '')` regardless of configuration.
@@ -148,7 +165,7 @@ getAbsoluteLocaleUrl('pl', '');      // 'https://example.com/pl'
 
 REPLACE_WITH_REPRO_URL
 
-Two files of substance: `astro.config.mjs` (`trailingSlash: 'never'`, two locales) and a page calling the five functions above. `npm install && npm test` builds and asserts the outputs — three assertions fail on 6.4.5. `npm run dev` shows the language-switcher link navigating to `/pl/` → 404 notice page.
+`output: 'server'` with `@astrojs/node` (standalone), `trailingSlash: 'never'`, two locales. `npm install && npm test` builds the site, starts the built server, and asserts over HTTP in two sections: **URL generation** (the seven calls above — five fail) and **server enforcement** (these pass: `GET /pl/` → 301 to `/pl`, `GET /pl` → 200), demonstrating that Astro redirects away from the URLs its own helpers generate. `npm run dev` shows the same via the language-switcher link → 404 notice page.
 
 ### Participation
 

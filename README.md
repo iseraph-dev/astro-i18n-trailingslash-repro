@@ -1,35 +1,48 @@
 # astro:i18n × `trailingSlash: 'never'` — trailing slash repro
 
-`getRelativeLocaleUrl()` / `getAbsoluteLocaleUrl()` return URLs **with a trailing
-slash** for a non-default locale with an empty (`''`) or root (`'/'`) path, even
-though the project sets `trailingSlash: 'never'`.
+`getRelativeLocaleUrl()`, `getAbsoluteLocaleUrl()` and `getAbsoluteLocaleUrlList()`
+from `astro:i18n` return URLs **with a trailing slash** under `trailingSlash: 'never'`
+whenever the locale-prefixed path is empty (`''`) or root (`'/'`) — and, when
+`prependWith` is used, whenever the input path carries a trailing slash.
 
 ```js
 // astro.config.mjs: trailingSlash: 'never', i18n: { defaultLocale: 'en', locales: ['en', 'pl'] }
-getRelativeLocaleUrl('pl');         // '/pl'  ✅
-getRelativeLocaleUrl('pl', '');     // '/pl/' ❌ expected '/pl'
-getRelativeLocaleUrl('pl', '/');    // '/pl/' ❌ expected '/pl'
-getAbsoluteLocaleUrl('pl', '');     // 'https://example.com/pl/' ❌ expected 'https://example.com/pl'
+getRelativeLocaleUrl('pl');                                  // '/pl'                  ✅
+getRelativeLocaleUrl('pl', '');                              // '/pl/'                 ❌ expected '/pl'
+getRelativeLocaleUrl('pl', '/');                             // '/pl/'                 ❌ expected '/pl'
+getRelativeLocaleUrl('pl', 'docs/setup');                    // '/pl/docs/setup'       ✅ (nested paths are fine)
+getRelativeLocaleUrl('pl', 'docs/setup/', { prependWith: 'blog' });
+                                                             // '/blog/pl/docs/setup/' ❌ expected '/blog/pl/docs/setup'
+getAbsoluteLocaleUrl('pl', '');                              // 'https://example.com/pl/' ❌
+getAbsoluteLocaleUrlList('');                                // ['https://example.com', 'https://example.com/pl/'] ❌
+//                          inconsistent within a single call ─────────────────^
 ```
+
+The last call is the documented hreflang use case — it emits alternate URLs that
+the very same configuration 301-redirects.
 
 ## Steps to reproduce
 
 ```bash
 npm install
-npm test        # astro build + assertions against dist/index.html
+npm test        # astro build + starts the built server + assertions over HTTP
 ```
 
-`npm test` prints PASS/FAIL for each call and exits non-zero because of the three
-failing cases. Alternatively `npm run dev` and open `http://localhost:4321/` —
-the rendered list shows the same outputs, and clicking the “Polski” language
-link navigates to `/pl/`, which the same `trailingSlash: 'never'` config rejects:
+`npm test` builds the site (`output: 'server'`, `@astrojs/node` standalone),
+starts `dist/server/entry.mjs`, and asserts in two sections:
 
-- **dev**: `GET /pl/` → **404** with the notice *“Your site is configured with
-  `trailingSlash` set to `never`. Do you want to go to `/pl` instead?”*
-  (`GET /pl` → 200)
-- **on-demand rendering (SSR)**: `GET /pl/` → **301** redirect to `/pl`
-  (308 for non-GET) — see `TrailingSlashHandler` in
-  `astro/src/core/routing/trailing-slash-handler.ts`
+1. **URL generation** — the seven calls above; five fail.
+2. **Server enforcement of the same config** — these pass, demonstrating the
+   contradiction: `GET /pl/` → **301** redirect to `/pl` (308 for non-GET; see
+   `TrailingSlashHandler` in `astro/src/core/routing/trailing-slash-handler.ts`),
+   `GET /pl` → 200.
+
+The process exits non-zero because of the five failing generation cases.
+
+Alternatively `npm run dev` and open `http://localhost:4321/` — the rendered list
+shows the same outputs, and clicking the “Polski” language link navigates to
+`/pl/`, which dev answers with **404** and the notice *“Your site is configured
+with `trailingSlash` set to `never`. Do you want to go to `/pl` instead?”*
 
 So the URLs produced by `astro:i18n` are URLs that Astro itself refuses to serve
 under the very same configuration.

@@ -1,12 +1,18 @@
 ---
-import { getRelativeLocaleUrl, getAbsoluteLocaleUrl } from 'astro:i18n';
+import {
+  getRelativeLocaleUrl,
+  getAbsoluteLocaleUrl,
+  getAbsoluteLocaleUrlList,
+} from 'astro:i18n';
 
 const results = {
   "getRelativeLocaleUrl('pl')": getRelativeLocaleUrl('pl'),
   "getRelativeLocaleUrl('pl', '')": getRelativeLocaleUrl('pl', ''),
   "getRelativeLocaleUrl('pl', '/')": getRelativeLocaleUrl('pl', '/'),
-  "getRelativeLocaleUrl('pl', 'about')": getRelativeLocaleUrl('pl', 'about'),
+  "getRelativeLocaleUrl('pl', 'docs/setup')": getRelativeLocaleUrl('pl', 'docs/setup'),
+  "getRelativeLocaleUrl('pl', 'docs/setup/', { prependWith: 'blog' })": getRelativeLocaleUrl('pl', 'docs/setup/', { prependWith: 'blog' }),
   "getAbsoluteLocaleUrl('pl', '')": getAbsoluteLocaleUrl('pl', ''),
+  "getAbsoluteLocaleUrlList('')": getAbsoluteLocaleUrlList(''),
 };
 ---
 
@@ -19,7 +25,7 @@ const results = {
     <h1>config: <code>trailingSlash: 'never'</code>, locales en (default) + pl</h1>
     <ul>
       {Object.entries(results).map(([call, url]) => (
-        <li><code>{call}</code> → <code>{url}</code></li>
+        <li><code>{call}</code> → <code>{JSON.stringify(url)}</code></li>
       ))}
     </ul>
     <p>Real-world case — language switcher link to the Polish home page:</p>
