@@ -1,0 +1,13 @@
+{
+  "name": "astro-i18n-trailingslash-repro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "test": "astro build && node check.mjs"
+  },
+  "dependencies": {
+    "astro": "^6.4.5"
+  }
+}

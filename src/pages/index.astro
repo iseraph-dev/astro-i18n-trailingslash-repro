@@ -1,0 +1,29 @@
+---
+import { getRelativeLocaleUrl, getAbsoluteLocaleUrl } from 'astro:i18n';
+
+const results = {
+  "getRelativeLocaleUrl('pl')": getRelativeLocaleUrl('pl'),
+  "getRelativeLocaleUrl('pl', '')": getRelativeLocaleUrl('pl', ''),
+  "getRelativeLocaleUrl('pl', '/')": getRelativeLocaleUrl('pl', '/'),
+  "getRelativeLocaleUrl('pl', 'about')": getRelativeLocaleUrl('pl', 'about'),
+  "getAbsoluteLocaleUrl('pl', '')": getAbsoluteLocaleUrl('pl', ''),
+};
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>astro:i18n trailingSlash: 'never' repro</title>
+  </head>
+  <body>
+    <h1>config: <code>trailingSlash: 'never'</code>, locales en (default) + pl</h1>
+    <ul>
+      {Object.entries(results).map(([call, url]) => (
+        <li><code>{call}</code> → <code>{url}</code></li>
+      ))}
+    </ul>
+    <p>Real-world case — language switcher link to the Polish home page:</p>
+    <a href={getRelativeLocaleUrl('pl', '')}>Polski</a>
+    <script type="application/json" id="results" set:html={JSON.stringify(results)} />
+  </body>
+</html>
