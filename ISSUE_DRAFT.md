@@ -108,33 +108,55 @@ The `prependWith` case is a second mechanism in the same function: `i === paths.
 
 `getLocaleAbsoluteUrl` and the `*List` variants delegate to the same logic, so they inherit all of the above.
 
-#### The documentation contradicts this behavior
+#### “But the docs example shows `/fr/`”
 
-The [`astro:i18n` reference](https://docs.astro.build/en/reference/modules/astro-i18n/) says:
+The current docs do show `getAbsoluteLocaleUrl("fr", ""); // returns https://example.com/fr/` — the implementation matches that line. The point of this issue is that the line documents the bug rather than a contract:
 
-> When creating routes with these functions, be sure to take into account your individual settings for: `base`, `trailingSlash`, `build.format`, `site`
+1. **The docs originally promised the slash-less output.** Until January 2025 the [`astro:i18n` reference](https://docs.astro.build/en/reference/modules/astro-i18n/) read `// returns /fr` and `// returns https://example.com/fr` for these exact calls. withastro/docs#10797 (merged 2025-01-27, days after #13032 was closed as “expected”) flipped the documented outputs to match the implementation:
 
-and the [`trailingSlash: 'never'` reference](https://docs.astro.build/en/reference/configuration-reference/#trailingslash):
+   ```diff
+   -// returns /fr
+   +// returns /fr/
+   -// returns https://example.com/fr
+   +// returns https://example.com/fr/
+   ```
 
-> Only match URLs that do not include a trailing slash (e.g: “/about”). In production, requests for on-demand rendered URLs with a trailing slash will be redirected to the correct URL for your convenience.
+2. **The example set is self-contradictory.** The same section still shows `getRelativeLocaleUrl("fr"); // returns /fr` next to `getRelativeLocaleUrl("fr", ""); // returns /fr/`. No implementation that honors a single `trailingSlash` setting can produce both — only one that treats `undefined` and `''` differently, i.e. the bug. The examples also state no config, yet under the **default** config (`'ignore'` + `build.format: 'directory'`) the actual output of `getRelativeLocaleUrl("fr")` is `/fr/`, so they don’t describe defaults either. The inline JSDoc shipped with Astro likewise shows `getRelativeLocaleUrl("es"); // /es`.
 
-Meanwhile the docs examples show:
+3. **The operative contract says trailing slashes are config-driven.** The same reference page instructs:
 
-```js
-getRelativeLocaleUrl("fr");     // returns /fr
-getRelativeLocaleUrl("fr", ""); // returns /fr/
-```
+   > When creating routes with these functions, be sure to take into account your individual settings for: `base`, `trailingSlash`, `build.format`, `site`
 
-No implementation that honors a single `trailingSlash` setting can produce both lines — only one that treats `undefined` and `''` differently, i.e. the bug. (Under the **default** config, `'ignore'` + `build.format: 'directory'`, the actual output of `getRelativeLocaleUrl("fr")` is `/fr/`, so the first example doesn’t match defaults either.) These outputs were edited into the docs in withastro/docs#10797 to mirror the implementation, which codified the buggy output instead of the contract.
+   and the [`trailingSlash: 'never'` reference](https://docs.astro.build/en/reference/configuration-reference/#trailingslash):
+
+   > Only match URLs that do not include a trailing slash (e.g: “/about”). In production, requests for on-demand rendered URLs with a trailing slash will be redirected to the correct URL for your convenience.
+
+   The runtime (`TrailingSlashHandler`) enforces exactly that — against the helpers’ own output.
 
 #### “Just call the function without the second argument”
 
-In #13032 @ematipico suggested omitting the argument instead of passing `''`. That doesn’t resolve this, because:
+In #13032 @ematipico suggested omitting the argument instead of passing `''`. The core problem with that: **in real code `path` is a computed value, not a literal.** The signature is
+
+```ts
+(locale: string, path?: string, options?: GetLocaleOptions) => string
+```
+
+and a language switcher or hreflang loop derives the current page’s path from `Astro.url.pathname`, holding a `string` — which is `''` on the home page:
+
+```astro
+---
+const path = stripLocale(Astro.url.pathname); // '' on the home page, 'docs/setup' elsewhere
+---
+{locales.map((l) => <a href={getRelativeLocaleUrl(l, path)}>{l}</a>)}
+```
+
+There is **no string value** of `path` that yields the correct home URL — the only escape is `getRelativeLocaleUrl(l, path || undefined)`, abusing argument optionality to change the output for the same logical input. The parameter’s own JSDoc reads “*An optional path to add after the `locale`*” — adding nothing after the locale should be equivalent to omitting it.
+
+Additionally:
 
 - `'/'` is an unambiguously valid root path and is equally affected;
 - the official docs example itself passes `""`;
-- in real code `path` is computed, not literal — e.g. a language switcher or an hreflang loop deriving the equivalent page from `Astro.url.pathname` naturally yields `''` on the home page, so the API silently degrades on the single most-linked page of the site;
-- omitting the argument is not even possible for `getAbsoluteLocaleUrlList(path)`, whose whole purpose is mapping one path across all locales.
+- omitting is not even possible for `getAbsoluteLocaleUrlList(path)`, whose whole purpose is mapping one path across all locales — and it is the documented hreflang building block.
 
 #### Suggested fix
 
