@@ -57,7 +57,7 @@ getAbsoluteLocaleUrlList('');                                // ['https://exampl
 Note two inconsistencies that no `trailingSlash` semantics can explain:
 
 - omitting `path` vs passing `''` produce different URLs (`/pl` vs `/pl/`);
-- `getAbsoluteLocaleUrlList('')` — the documented hreflang use case — is inconsistent **within a single call**: the default locale gets no slash, every other locale gets one.
+- `getAbsoluteLocaleUrlList('')` — “a list of absolute paths for all the locales”, the shape an hreflang block needs — is inconsistent **within a single call**: the default locale gets no slash, every other locale gets one.
 
 This is a re-file of #14140 (same bug, closed as stale on no activity), where @matthewp wrote:
 
@@ -69,12 +69,16 @@ Why projects end up here: with `'always'` or the default `'ignore'` + `build.for
 
 #### Astro itself rejects the URLs it generates
 
-The same config that produces these links refuses to serve them — both asserted live in the reproduction:
+The same config that produces these links refuses to serve them — both observable in the reproduction (`npm test` asserts the SSR behavior, `npm run dev` shows the dev notice):
 
 - **dev**: `GET /pl/` → **404** with the notice *“Your site is configured with `trailingSlash` set to `never`. Do you want to go to `/pl` instead?”* (`GET /pl` → 200)
 - **on-demand rendering** (`@astrojs/node`): `GET /pl/` → **301** redirect to `/pl` (308 for non-GET) via `TrailingSlashHandler` (`packages/astro/src/core/routing/trailing-slash-handler.ts`)
 
-Practical impact: a language switcher pointing at a locale’s home page 404s in dev and costs a redirect on every click in production, and hreflang/canonical alternates built from `getAbsoluteLocaleUrlList()` send search engines to URLs that 301.
+The affected URLs are the most-linked pages of a localized site — every language switcher and every hreflang block includes each locale’s home page. Concretely:
+
+- **An extra round trip on every affected navigation.** Each click on a generated home link costs a 301 plus a second request before any HTML arrives — the hop Lighthouse’s “Avoid multiple page redirects” audit penalizes. On serverless/edge deployments each such hit is an extra billed invocation, and access logs and edge analytics fill with self-inflicted 301s for plain internal navigation.
+- **SEO.** hreflang/canonical alternates built from `getAbsoluteLocaleUrlList()` send crawlers to URLs that 301: Search Console files the targets under “Page with redirect”, crawl budget is spent on the hop, and the alternate URLs contradict the URLs `@astrojs/sitemap` emits for the same pages — the sitemap integration explicitly honors `trailingSlash: 'never'` (`write-sitemap.js` checks `astroConfig.trailingSlash === "never"`), so two official Astro packages currently disagree about the canonical form of the same page.
+- **Dev.** The very first language-switcher link built with the documented API responds 404 (notice page above).
 
 #### Root cause
 
@@ -156,7 +160,7 @@ Additionally:
 
 - `'/'` is an unambiguously valid root path and is equally affected;
 - the official docs example itself passes `""`;
-- omitting is not even possible for `getAbsoluteLocaleUrlList(path)`, whose whole purpose is mapping one path across all locales — and it is the documented hreflang building block.
+- omitting is not even possible for `getAbsoluteLocaleUrlList(path)`, whose whole purpose is mapping one path across all locales — the shape an hreflang block needs.
 
 #### Suggested fix
 
