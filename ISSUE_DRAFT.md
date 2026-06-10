@@ -1,22 +1,7 @@
 <!--
-══════════════════════════════════════════════════════════════════════
-DRAFT — not posted. This HTML comment is invisible when rendered on
-GitHub, but you may delete it before submitting.
-
-Title:
+Filed as https://github.com/withastro/astro/issues/17034 on 2026-06-10.
+Title used:
 astro:i18n URL helpers return trailing slashes that violate `trailingSlash: 'never'` — Astro 301-redirects its own generated URLs (re-file of #14140)
-
-Before posting:
-1. Push this repro to a public GitHub repo (or import to StackBlitz)
-   and replace https://github.com/iseraph-dev/astro-i18n-trailingslash-repro below.
-2. Optionally tick the Participation checkbox.
-
-Submit with:
-  gh issue create --repo withastro/astro \
-    --title "astro:i18n URL helpers return trailing slashes that violate \`trailingSlash: 'never'\` — Astro 301-redirects its own generated URLs (re-file of #14140)" \
-    --body-file ISSUE_DRAFT.md
-or open the form prefilled in the browser by appending --web.
-══════════════════════════════════════════════════════════════════════
 -->
 
 ### Astro Info

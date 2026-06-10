@@ -1,5 +1,7 @@
 # astro:i18n × `trailingSlash: 'never'` — trailing slash repro
 
+Reported upstream as [withastro/astro#17034](https://github.com/withastro/astro/issues/17034).
+
 `getRelativeLocaleUrl()`, `getAbsoluteLocaleUrl()` and `getAbsoluteLocaleUrlList()`
 from `astro:i18n` return URLs **with a trailing slash** under `trailingSlash: 'never'`
 whenever the locale-prefixed path is empty (`''`) or root (`'/'`) — and, when
