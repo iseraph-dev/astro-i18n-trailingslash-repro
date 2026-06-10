@@ -56,16 +56,24 @@ try {
   }
 
   // 2. Server enforcement of the same config. These assertions SHOULD pass —
-  // they demonstrate that Astro itself refuses to serve the URLs generated above.
+  // every URL the helpers ought to return is a real page (200), while the
+  // URLs they actually return are redirected away (301).
   console.log('\n— Server enforcement of the same config —');
-  const resSlash = await fetch(`${BASE}/pl/`, { redirect: 'manual' });
-  check(
-    resSlash.status === 301 && resSlash.headers.get('location') === '/pl',
-    'GET /pl/',
-    `got ${resSlash.status} (location: ${resSlash.headers.get('location')}), expected 301 (location: /pl)`,
-  );
-  const resNoSlash = await fetch(`${BASE}/pl`);
-  check(resNoSlash.status === 200, 'GET /pl', `got ${resNoSlash.status}, expected 200`);
+  for (const [from, to] of [
+    ['/pl/', '/pl'],
+    ['/blog/pl/docs/setup/', '/blog/pl/docs/setup'],
+  ]) {
+    const res = await fetch(`${BASE}${from}`, { redirect: 'manual' });
+    check(
+      res.status === 301 && res.headers.get('location') === to,
+      `GET ${from}`,
+      `got ${res.status} (location: ${res.headers.get('location')}), expected 301 (location: ${to})`,
+    );
+  }
+  for (const path of ['/pl', '/pl/docs/setup', '/blog/pl/docs/setup']) {
+    const res = await fetch(`${BASE}${path}`);
+    check(res.status === 200, `GET ${path}`, `got ${res.status}, expected 200`);
+  }
 } finally {
   server.kill();
 }

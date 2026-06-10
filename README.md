@@ -33,9 +33,21 @@ starts `dist/server/entry.mjs`, and asserts in two sections:
 
 1. **URL generation** — the seven calls above; five fail.
 2. **Server enforcement of the same config** — these pass, demonstrating the
-   contradiction: `GET /pl/` → **301** redirect to `/pl` (308 for non-GET; see
-   `TrailingSlashHandler` in `astro/src/core/routing/trailing-slash-handler.ts`),
-   `GET /pl` → 200.
+   contradiction: the slash-less URLs the helpers *should* return are real
+   pages (`/pl`, `/pl/docs/setup`, `/blog/pl/docs/setup` → **200**), while the
+   URLs they *do* return are redirected away (`/pl/`, `/blog/pl/docs/setup/` →
+   **301**; 308 for non-GET — see `TrailingSlashHandler` in
+   `astro/src/core/routing/trailing-slash-handler.ts`).
+
+Every URL exercised by the tests exists as a page:
+
+```
+src/pages/index.astro               → /
+src/pages/pl/index.astro            → /pl
+src/pages/docs/setup.astro          → /docs/setup
+src/pages/pl/docs/setup.astro       → /pl/docs/setup
+src/pages/blog/pl/docs/setup.astro  → /blog/pl/docs/setup   (the prependWith: 'blog' mount)
+```
 
 The process exits non-zero because of the five failing generation cases.
 
